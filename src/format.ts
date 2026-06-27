@@ -178,7 +178,7 @@ export function printReportJson(results: CheckEntry[], specTitle: string, specVe
   const totalTime = results.reduce((acc, r) => acc + r.durationMs, 0);
   const report = {
     specshield: {
-      version: '0.1.0',
+      version: '0.2.0',
       spec: specTitle,
       specVersion,
       timestamp: new Date().toISOString(),

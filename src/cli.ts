@@ -40,7 +40,7 @@ const program = new Command();
 program
   .name('specshield')
   .description('OpenAPI contract testing tool — validate your API endpoints against your OpenAPI specification')
-  .version('0.1.0');
+  .version('0.2.0');
 
 program
   .command('check')
