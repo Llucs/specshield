@@ -14,10 +14,10 @@ jobs:
         node-version: [18, 20, 22]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
 
@@ -34,7 +34,7 @@ jobs:
           FMT_VERSION=$(node -e "const m=require('fs').readFileSync('src/reporters/json.ts','utf8').match(/version: '([^']+)'/);console.log(m&&m[1]||'not found')")
           echo "package.json: $PKG_VERSION"
           echo "cli.ts: $CLI_VERSION"
-          echo "format.ts: $FMT_VERSION"
+          echo "json.ts: $FMT_VERSION"
           if [ "$PKG_VERSION" != "$CLI_VERSION" ] || [ "$PKG_VERSION" != "$FMT_VERSION" ]; then
             echo "Version mismatch!"
             exit 1
@@ -68,7 +68,7 @@ jobs:
         run: node dist/cli.js check /tmp/petstore.yaml --base-url https://petstore3.swagger.io/api/v3 --only-methods get --report sarif | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['version']=='2.1.0'"
 
       - name: Check Petstore JUnit report
-        run: node dist/cli.js check /tmp/petstore.yaml --base-url https://petstore3.swagger.io/api/v3 --only-methods get --report junit | python3 -c "import xml.etree.ElementTree as ET; ET.fromstring(sys.stdin.read())"
+        run: node dist/cli.js check /tmp/petstore.yaml --base-url https://petstore3.swagger.io/api/v3 --only-methods get --report junit | python3 -c "import xml.etree.ElementTree as ET, sys; ET.fromstring(sys.stdin.read())"
 
       - name: Check with parallel
         run: node dist/cli.js check /tmp/petstore.yaml --base-url https://petstore3.swagger.io/api/v3 --only-methods get --parallel 10

@@ -9,7 +9,7 @@ npx specshield check ./openapi.yaml --base-url https://api.example.com/v3
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![OpenAPI 3.0](https://img.shields.io/badge/OpenAPI-3.0-brightgreen)](#)
 [![OpenAPI 3.1](https://img.shields.io/badge/OpenAPI-3.1-brightgreen)](#)
-[![CI Ready](https://img.shields.io/badge/CI-ready-ff6b35)](#)
+[![CI](https://github.com/Llucs/specshield/actions/workflows/test.yml/badge.svg)](https://github.com/Llucs/specshield/actions/workflows/test.yml)
 
 SpecShield validates every endpoint of your API against the responses declared in your OpenAPI specification, in CI or locally. It checks that status codes match, response bodies conform to schemas, and content types align — with no setup beyond a spec file and a base URL.
 
