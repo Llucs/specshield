@@ -8,12 +8,12 @@ This document contains the rules and conventions for contributing to SpecShield.
 - Bump the version in these three files on every change:
   - `package.json`
   - `src/cli.ts` (`.version()` call)
-  - `src/format.ts` (JSON report `version` field)
+  - `src/reporters/json.ts` (JSON report `version` field)
 - Version bump rules:
   - **patch** (0.0.x): bug fixes, documentation, refactoring with no API/feature changes
   - **minor** (0.x.0): new features, new commands, new options (backward compatible)
   - **major** (x.0.0): breaking changes in CLI, output format, or core behavior
-- The version in `package.json`, `cli.ts`, and `format.ts` must always match
+- The version in `package.json`, `cli.ts`, and `json.ts` must always match
 - Never commit without bumping the version first
 
 ## Before Every Commit
@@ -36,6 +36,7 @@ node dist/cli.js --version
 ```bash
 node dist/cli.js check --help
 node dist/cli.js diff --help
+node dist/cli.js validate --help
 ```
 
 - Verify all commands and options display correctly.
@@ -47,7 +48,7 @@ node dist/cli.js diff /tmp/spec-old.yaml /tmp/spec-new.yaml
 - Run diff against known test specs and verify output is correct.
 
 ```bash
-node dist/cli.js check /tmp/spec-old.yaml --report json | python3 -c "import json,sys; json.load(sys.stdin)"
+node dist/cli.js check /tmp/petstore.yaml --base-url https://petstore3.swagger.io/api/v3 --only-methods get --report json | python3 -c "import json,sys; json.load(sys.stdin)"
 ```
 
 - Verify JSON report output is valid JSON.
@@ -80,14 +81,25 @@ node dist/cli.js check /tmp/spec-old.yaml --report json | python3 -c "import jso
 ## Structure
 
 - `src/cli.ts` — CLI entry point and command definitions
-- `src/spec.ts` — OpenAPI spec loading and parsing
-- `src/check.ts` — HTTP checking logic (make requests, validate responses)
-- `src/format.ts` — Output formatting (text, JSON, JUnit, score)
-- `src/diff.ts` — Breaking change detection between specs
-- `src/schema.ts` — JSON Schema normalization
-- `src/types.ts` — TypeScript interfaces
+- `src/core/` — Core logic modules
+  - `spec.ts` — OpenAPI spec loading, parsing, and validation
+  - `check.ts` — HTTP checking logic with parallel execution
+  - `diff.ts` — Breaking change detection between specs
+  - `schema.ts` — JSON Schema normalization
+  - `config.ts` — specshield.yaml configuration file loader
+  - `baseline.ts` — Baseline support for ignoring known failures
+  - `watch.ts` — Watch mode for continuous testing
+  - `types.ts` — TypeScript interfaces
+- `src/reporters/` — Output formatters
+  - `text.ts` — Text/TTY console output
+  - `json.ts` — JSON report output
+  - `junit.ts` — JUnit XML report output
+  - `html.ts` — HTML report output
+  - `sarif.ts` — SARIF report output
+  - `github.ts` — GitHub Actions annotations
+  - `score.ts` — API Score calculation
 
-When adding new functionality, place it in the appropriate existing file. Only create a new file if the new code is conceptually independent from all existing modules.
+When adding new functionality, place it in the appropriate existing module. Only create a new file if the new code is conceptually independent from all existing modules.
 
 ## Testing
 
@@ -102,10 +114,15 @@ When adding new functionality, place it in the appropriate existing file. Only c
   ```
 - After any change to the checking logic, verify with both passing and failing scenarios
 - After any change to the diff logic, verify with both identical and divergent specs
+- Test all report formats: `text`, `json`, `junit`, `html`, `sarif`
+- Test parallel execution: `--parallel 10`
+- Test config file: `--config specshield.yaml`
+- Test baseline: `--baseline baseline.json`
+- Test validate: `validate ./openapi.yaml`
 
 ## CLI Conventions
 
-- Command names: lowercase, single word (`check`, `diff`)
+- Command names: lowercase, single word (`check`, `diff`, `validate`)
 - Option names: `--kebab-case` with single-dash short form where intuitive
 - Arguments: required arguments before options
 - Default values should be sensible for CI usage (timeout, report format, etc.)
@@ -117,6 +134,8 @@ When adding new functionality, place it in the appropriate existing file. Only c
 - `text` (default): colored console output with API Score
 - `json`: structured JSON to stdout
 - `junit`: JUnit XML to stdout
+- `html`: self-contained HTML report to stdout
+- `sarif`: SARIF JSON to stdout
 - When adding a new report format, register it in the CLI `--report` option validation and implement both the formatter function and the dispatch in the `check` command action
 
 ## AI Agent Rules
