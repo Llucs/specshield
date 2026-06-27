@@ -1,0 +1,45 @@
+name: Bug Report
+description: Report something that doesn't work as expected
+labels: [bug]
+
+body:
+  - type: input
+    id: version
+    attributes:
+      label: SpecShield version
+      description: Run `specshield --version` and paste the output
+      placeholder: e.g. 0.2.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened and what did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include the exact command, your OpenAPI spec (or a minimal snippet), and the full output.
+      placeholder: |
+        ```
+        specshield check ./spec.yaml --base-url https://api.example.com
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Node.js version, OS, CI system if applicable
+      placeholder: |
+        - Node.js 20.14
+        - Ubuntu 24.04
+        - GitHub Actions
+    validations:
+      required: false
