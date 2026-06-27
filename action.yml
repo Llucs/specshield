@@ -1,0 +1,101 @@
+name: 'SpecShield Action'
+description: 'Validate API endpoints against your OpenAPI specification'
+author: 'Llucs'
+
+inputs:
+  spec:
+    description: 'Path to OpenAPI spec file (JSON or YAML)'
+    required: true
+  base-url:
+    description: 'Base URL of the API. Defaults to spec server URL'
+    required: false
+  headers:
+    description: 'Custom request headers as JSON object (e.g., {"Authorization": "Bearer xxx"})'
+    required: false
+  timeout:
+    description: 'Request timeout in milliseconds'
+    required: false
+    default: '10000'
+  skip-methods:
+    description: 'Comma-separated methods to skip (e.g., post,put,delete)'
+    required: false
+  only-methods:
+    description: 'Comma-separated methods to test (e.g., get,post)'
+    required: false
+  params:
+    description: 'Additional parameters as JSON object (e.g., {"petId": "42"})'
+    required: false
+  report:
+    description: 'Output format: text, json, junit, html, sarif'
+    required: false
+    default: 'text'
+  parallel:
+    description: 'Number of parallel requests'
+    required: false
+    default: '5'
+  baseline:
+    description: 'Path to baseline file for known failures'
+    required: false
+  github-annotations:
+    description: 'Enable GitHub PR annotations'
+    required: false
+    default: 'true'
+
+outputs:
+  score:
+    description: 'API Score (0-100)'
+    value: ${{ steps.run-specshield.outputs.score }}
+  passed:
+    description: 'Number of passed checks'
+    value: ${{ steps.run-specshield.outputs.passed }}
+  failed:
+    description: 'Number of failed checks'
+    value: ${{ steps.run-specshield.outputs.failed }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install SpecShield
+      shell: bash
+      run: npm install -g specshield
+
+    - name: Run SpecShield
+      id: run-specshield
+      shell: bash
+      run: |
+        ARGS="check '${{ inputs.spec }}'"
+        if [ -n '${{ inputs.base-url }}' ]; then ARGS="$ARGS --base-url '${{ inputs.base-url }}'"; fi
+        if [ -n '${{ inputs.headers }}' ]; then
+          echo '${{ inputs.headers }}' | node -e "
+            const h = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+            const out = Object.entries(h).map(([k,v]) => k + ': ' + v).join(' ');
+            console.log(out);
+          " | while read -r line; do ARGS="$ARGS -H '$line'"; done
+        fi
+        if [ -n '${{ inputs.timeout }}' ]; then ARGS="$ARGS --timeout '${{ inputs.timeout }}'"; fi
+        if [ -n '${{ inputs.skip-methods }}' ]; then ARGS="$ARGS --skip-methods '${{ inputs.skip-methods }}'"; fi
+        if [ -n '${{ inputs.only-methods }}' ]; then ARGS="$ARGS --only-methods '${{ inputs.only-methods }}'"; fi
+        if [ -n '${{ inputs.params }}' ]; then
+          echo '${{ inputs.params }}' | node -e "
+            const p = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+            const out = Object.entries(p).map(([k,v]) => k + '=' + v).join(' ');
+            console.log(out);
+          " | while read -r line; do ARGS="$ARGS -p '$line'"; done
+        fi
+        if [ -n '${{ inputs.report }}' ]; then ARGS="$ARGS --report '${{ inputs.report }}'"; fi
+        if [ -n '${{ inputs.parallel }}' ]; then ARGS="$ARGS --parallel '${{ inputs.parallel }}'"; fi
+        if [ -n '${{ inputs.baseline }}' ]; then ARGS="$ARGS --baseline '${{ inputs.baseline }}'"; fi
+        if [ '${{ inputs.github-annotations }}' = 'true' ]; then ARGS="$ARGS --github-annotations"; fi
+        OUTPUT=$(specshield $ARGS 2>&1) || true
+        echo "$OUTPUT"
+        SCORE=$(echo "$OUTPUT" | grep -oP 'API Score: \K\d+' || echo "0")
+        PASSED=$(echo "$OUTPUT" | grep -oP '\d+(?= passed)' || echo "0")
+        FAILED=$(echo "$OUTPUT" | grep -oP '\d+(?= failed)' || echo "0")
+        echo "score=$SCORE" >> $GITHUB_OUTPUT
+        echo "passed=$PASSED" >> $GITHUB_OUTPUT
+        echo "failed=$FAILED" >> $GITHUB_OUTPUT

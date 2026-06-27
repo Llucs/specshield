@@ -14,6 +14,7 @@ export interface CheckConfig {
   onlyMethods: Set<string> | null;
   verbose: boolean;
   color: boolean;
+  parallel?: number;
 }
 
 export interface CheckEntry {
@@ -37,4 +38,40 @@ export interface DiffChange {
   path: string;
   method: string;
   message: string;
+}
+
+export interface SpecShieldConfig {
+  check?: {
+    baseUrl?: string;
+    headers?: Record<string, string>;
+    timeout?: number;
+    skipMethods?: string[];
+    onlyMethods?: string[];
+    params?: Record<string, string>;
+    verbose?: boolean;
+    report?: string;
+    parallel?: number;
+  };
+  baseline?: string;
+  watch?: boolean;
+}
+
+export interface SpecValidation {
+  type: 'warning' | 'error';
+  message: string;
+  path?: string;
+}
+
+export interface BaselineEntry {
+  method: string;
+  path: string;
+  errors: string[];
+  status: 'fail' | 'error';
+}
+
+export interface BaselineData {
+  version: string;
+  createdAt: string;
+  updatedAt: string;
+  failures: BaselineEntry[];
 }

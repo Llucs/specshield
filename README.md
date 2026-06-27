@@ -54,7 +54,30 @@ SpecShield · OpenAPI Contract Testing
 | `-p, --param <params...>` | — | Additional parameters as key=value (e.g., `-p petId=42`) |
 | `--verbose` | false | Show detailed output for all checks |
 | `--no-color` | false | Disable colored output |
-| `--report <format>` | `text` | Output format: `text`, `json`, or `junit` |
+| `--report <format>` | `text` | Output format: `text`, `json`, `junit`, `html`, `sarif` |
+| `--parallel <number>` | `5` | Number of parallel requests |
+| `--config <path>` | — | Path to `specshield.yaml` config file |
+| `--baseline <path>` | — | Path to baseline file for ignoring known failures |
+| `--update-baseline <path>` | — | Update baseline file with current results |
+| `--watch` | false | Watch spec file for changes and re-run checks |
+| `--github-annotations` | false | Output GitHub Actions annotations |
+| `--validate-spec` | false | Run spec validations (warnings/errors) |
+
+### `validate`
+
+Validate an OpenAPI spec file for common issues:
+
+```bash
+specshield validate ./openapi.yaml
+```
+
+Detected issues:
+- Paths with no operations
+- Operations with no responses defined
+- Unusual HTTP status codes
+- Duplicate operationIds
+- Duplicate parameter names
+- Deprecated endpoints
 
 ### `diff`
 
@@ -97,6 +120,92 @@ specshield check ./spec.yaml --base-url http://localhost:3000 --report json
 
 # JUnit XML — integrate with CI pipelines (Jenkins, GitLab, etc.)
 specshield check ./spec.yaml --base-url http://localhost:3000 --report junit
+
+# HTML — self-contained report for browsers
+specshield check ./spec.yaml --base-url http://localhost:3000 --report html > report.html
+
+# SARIF — static analysis results for GitHub Advanced Security
+specshield check ./spec.yaml --base-url http://localhost:3000 --report sarif
+```
+
+## Configuration File
+
+SpecShield supports a `specshield.yaml` configuration file:
+
+```yaml
+# specshield.yaml
+check:
+  baseUrl: https://api.example.com/v3
+  headers:
+    Authorization: Bearer token123
+  timeout: 10000
+  skipMethods:
+    - post
+    - put
+    - delete
+  onlyMethods:
+    - get
+  params:
+    petId: 42
+  verbose: false
+  report: json
+  parallel: 10
+
+baseline: specshield-baseline.json
+watch: false
+```
+
+Pass it explicitly with `--config` or place it in your project root (auto-detected as `specshield.yaml`, `specshield.yml`, `.specshield.yaml`, or `.specshield.yml`). CLI flags override config file values.
+
+## Baseline
+
+Ignore known failures so they don't block CI:
+
+```bash
+# Create baseline from current results
+specshield check ./spec.yaml --base-url http://localhost:3000 --update-baseline baseline.json
+
+# Use baseline to ignore known failures
+specshield check ./spec.yaml --base-url http://localhost:3000 --baseline baseline.json
+```
+
+This is useful when you have pre-existing failures that you plan to fix later without blocking deployments.
+
+## GitHub Actions
+
+SpecShield has an official GitHub Action:
+
+```yaml
+- uses: Llucs/specshield@v0
+  with:
+    spec: ./openapi.yaml
+    base-url: https://api.example.com/v3
+    only-methods: get
+    report: text
+```
+
+It also supports PR annotations via `--github-annotations`:
+
+```bash
+specshield check ./spec.yaml --base-url http://localhost:3000 --github-annotations
+```
+
+This outputs GitHub Actions workflow commands that create annotations on the file in PRs.
+
+## Watch Mode
+
+Re-run checks automatically when the spec file changes:
+
+```bash
+specshield check ./spec.yaml --base-url http://localhost:3000 --watch
+```
+
+## Parallel Execution
+
+Endpoints are tested concurrently (default 5 parallel requests):
+
+```bash
+specshield check ./spec.yaml --base-url http://localhost:3000 --parallel 20
 ```
 
 ## API Score
@@ -139,8 +248,31 @@ specshield check ./spec.json --base-url http://localhost:3000 \
 # Breaking change detection in CI
 specshield diff ./main-branch-spec.yaml ./pr-spec.yaml
 
+# With config file
+specshield check ./spec.yaml --config specshield.yaml
+
+# With baseline
+specshield check ./spec.yaml --base-url http://localhost:3000 \
+  --baseline baseline.json
+
+# Validate spec quality
+specshield validate ./openapi.yaml
+
+# HTML report
+specshield check ./spec.yaml --base-url http://localhost:3000 \
+  --report html > report.html
+
+# SARIF report
+specshield check ./spec.yaml --base-url http://localhost:3000 \
+  --report sarif
+
+# GitHub Actions annotations
+specshield check ./spec.yaml --base-url http://localhost:3000 \
+  --github-annotations
+
 # JUnit report for GitLab CI
-specshield check ./spec.yaml --base-url http://localhost:3000 --report junit > report.xml
+specshield check ./spec.yaml --base-url http://localhost:3000 \
+  --report junit > report.xml
 ```
 
 ## Installation

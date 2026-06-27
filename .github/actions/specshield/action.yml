@@ -1,0 +1,95 @@
+name: 'SpecShield'
+description: 'Validate API endpoints against OpenAPI spec in CI'
+author: 'Llucs'
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  spec:
+    description: 'Path to OpenAPI spec file (JSON or YAML)'
+    required: true
+  base-url:
+    description: 'Base URL of the API. Defaults to spec server URL'
+    required: false
+  headers:
+    description: 'Custom request headers (e.g., "Authorization: Bearer xxx")'
+    required: false
+  timeout:
+    description: 'Request timeout in milliseconds'
+    required: false
+    default: '10000'
+  skip-methods:
+    description: 'Comma-separated methods to skip (e.g., post,put,delete)'
+    required: false
+  only-methods:
+    description: 'Comma-separated methods to test (e.g., get,post)'
+    required: false
+  params:
+    description: 'Additional parameters as key=value comma-separated (e.g., petId=42,status=active)'
+    required: false
+  report:
+    description: 'Output format: text, json, junit, html, sarif'
+    required: false
+    default: 'text'
+  report-html:
+    description: 'Write HTML report to file path'
+    required: false
+  baseline:
+    description: 'Path to baseline JSON file for known failures'
+    required: false
+  baseline-update:
+    description: 'Run checks and save results as baseline JSON'
+    required: false
+  validate-spec:
+    description: 'Run spec validation warnings'
+    required: false
+    default: 'false'
+  sarif-output:
+    description: 'Path to write SARIF output file'
+    required: false
+    default: 'results.sarif'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install SpecShield
+      shell: bash
+      run: npm install -g specshield
+
+    - name: Run SpecShield check
+      shell: bash
+      id: specshield-check
+      run: |
+        ARGS=""
+        if [ -n "${{ inputs.base-url }}" ]; then ARGS="$ARGS --base-url ${{ inputs.base-url }}"; fi
+        if [ -n "${{ inputs.headers }}" ]; then
+          IFS=',' read -ra HDRS <<< "${{ inputs.headers }}"
+          for h in "${HDRS[@]}"; do ARGS="$ARGS -H '$h'"; done
+        fi
+        if [ -n "${{ inputs.timeout }}" ]; then ARGS="$ARGS -t ${{ inputs.timeout }}"; fi
+        if [ -n "${{ inputs.skip-methods }}" ]; then ARGS="$ARGS --skip-methods ${{ inputs.skip-methods }}"; fi
+        if [ -n "${{ inputs.only-methods }}" ]; then ARGS="$ARGS --only-methods ${{ inputs.only-methods }}"; fi
+        if [ -n "${{ inputs.params }}" ]; then
+          IFS=',' read -ra PRMS <<< "${{ inputs.params }}"
+          for p in "${PRMS[@]}"; do ARGS="$ARGS -p '$p'"; done
+        fi
+        if [ -n "${{ inputs.report }}" ]; then ARGS="$ARGS --report ${{ inputs.report }}"; fi
+        if [ -n "${{ inputs.report-html }}" ]; then ARGS="$ARGS --report-html ${{ inputs.report-html }}"; fi
+        if [ -n "${{ inputs.baseline }}" ]; then ARGS="$ARGS --baseline ${{ inputs.baseline }}"; fi
+        if [ -n "${{ inputs.baseline-update }}" ]; then ARGS="$ARGS --baseline-update ${{ inputs.baseline-update }}"; fi
+        if [ "${{ inputs.validate-spec }}" = "true" ]; then ARGS="$ARGS --validate-spec"; fi
+        specshield check ${{ inputs.spec }} $ARGS
+
+    - name: Generate SARIF
+      if: ${{ inputs.report == 'sarif' }}
+      shell: bash
+      run: |
+        specshield check ${{ inputs.spec }} --report sarif > ${{ inputs.sarif-output }}
+
+    - name: Upload SARIF to GitHub Code Scanning
+      if: ${{ inputs.report == 'sarif' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.sarif-output }}
+        category: specshield

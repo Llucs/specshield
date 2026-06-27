@@ -1,0 +1,108 @@
+name: Test SpecShield
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Check version consistency
+        run: |
+          PKG_VERSION=$(node -e "console.log(require('./package.json').version)")
+          CLI_VERSION=$(node -e "const m=require('fs').readFileSync('src/cli.ts','utf8').match(/\.version\('([^']+)'\)/);console.log(m&&m[1]||'not found')")
+          FMT_VERSION=$(node -e "const m=require('fs').readFileSync('src/reporters/json.ts','utf8').match(/version: '([^']+)'/);console.log(m&&m[1]||'not found')")
+          echo "package.json: $PKG_VERSION"
+          echo "cli.ts: $CLI_VERSION"
+          echo "format.ts: $FMT_VERSION"
+          if [ "$PKG_VERSION" != "$CLI_VERSION" ] || [ "$PKG_VERSION" != "$FMT_VERSION" ]; then
+            echo "Version mismatch!"
+            exit 1
+          fi
+
+      - name: CLI --version
+        run: node dist/cli.js --version
+
+      - name: CLI check --help
+        run: node dist/cli.js check --help
+
+      - name: CLI diff --help
+        run: node dist/cli.js diff --help
+
+      - name: CLI validate --help
+        run: node dist/cli.js validate --help
+
+      - name: Download Petstore spec
+        run: curl -s https://petstore3.swagger.io/api/v3/openapi.yaml -o /tmp/petstore.yaml
+
+      - name: Check Petstore (GET only)
+        run: node dist/cli.js check /tmp/petstore.yaml --base-url https://petstore3.swagger.io/api/v3 --only-methods get --report text
+
+      - name: Check Petstore JSON report
+        run: node dist/cli.js check /tmp/petstore.yaml --base-url https://petstore3.swagger.io/api/v3 --only-methods get --report json | python3 -c "import json,sys; json.load(sys.stdin)"
+
+      - name: Check Petstore HTML report
+        run: node dist/cli.js check /tmp/petstore.yaml --base-url https://petstore3.swagger.io/api/v3 --only-methods get --report html > /tmp/report.html && test -s /tmp/report.html
+
+      - name: Check Petstore SARIF report
+        run: node dist/cli.js check /tmp/petstore.yaml --base-url https://petstore3.swagger.io/api/v3 --only-methods get --report sarif | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['version']=='2.1.0'"
+
+      - name: Check Petstore JUnit report
+        run: node dist/cli.js check /tmp/petstore.yaml --base-url https://petstore3.swagger.io/api/v3 --only-methods get --report junit | python3 -c "import xml.etree.ElementTree as ET; ET.fromstring(sys.stdin.read())"
+
+      - name: Check with parallel
+        run: node dist/cli.js check /tmp/petstore.yaml --base-url https://petstore3.swagger.io/api/v3 --only-methods get --parallel 10
+
+      - name: GitHub Annotations
+        run: node dist/cli.js check /tmp/petstore.yaml --base-url https://petstore3.swagger.io/api/v3 --only-methods get --github-annotations
+
+      - name: Validate spec
+        run: node dist/cli.js validate /tmp/petstore.yaml
+
+      - name: Validate spec (remote URL)
+        run: node dist/cli.js validate https://petstore3.swagger.io/api/v3/openapi.yaml
+
+      - name: Diff identical specs
+        run: node dist/cli.js diff /tmp/petstore.yaml /tmp/petstore.yaml
+
+      - name: Baseline support
+        run: |
+          echo '{"version":"0.3.0","createdAt":"2024-01-01","updatedAt":"2024-01-01","failures":[]}' > /tmp/baseline.json
+          node dist/cli.js check /tmp/petstore.yaml --base-url https://petstore3.swagger.io/api/v3 --only-methods get --baseline /tmp/baseline.json --report json | python3 -c "import json,sys; json.load(sys.stdin)"
+
+      - name: Config file support
+        run: |
+          echo 'check:' > /tmp/specshield.yaml
+          echo '  onlyMethods:' >> /tmp/specshield.yaml
+          echo '    - get' >> /tmp/specshield.yaml
+          echo '  report: json' >> /tmp/specshield.yaml
+          echo '  baseUrl: https://petstore3.swagger.io/api/v3' >> /tmp/specshield.yaml
+          node dist/cli.js check /tmp/petstore.yaml --config /tmp/specshield.yaml | python3 -c "import json,sys; json.load(sys.stdin)"
+
+      - name: Error on missing spec
+        run: |
+          node dist/cli.js check /tmp/nonexistent.yaml 2>&1 && exit 1 || echo "OK: error expected"
+
+      - name: Error on invalid report format
+        run: |
+          node dist/cli.js check /tmp/petstore.yaml --report invalid 2>&1 && exit 1 || echo "OK: error expected"

@@ -95,7 +95,7 @@ async function checkEndpoint(
 ): Promise<CheckEntry> {
   const { path, method, summary, operation } = endpoint;
   const baseUrl = config.baseUrl.replace(/\/+$/, '');
-  let url = `${baseUrl}${path}`;
+  let url = baseUrl + path;
 
   const allParams = getOperationParams(operation);
   const additionalParams = { ...config.additionalParams };
@@ -107,7 +107,7 @@ async function checkEndpoint(
     const required = p.required === true;
 
     if (location === 'path') {
-      const placeholder = `{${name}}`;
+      const placeholder = '{' + name + '}';
       if (url.includes(placeholder)) {
         const value = additionalParams[name] || generateParamValue(param);
         if (value !== null) {
@@ -133,7 +133,7 @@ async function checkEndpoint(
     if (location === 'query') {
       const value = additionalParams[name] || generateParamValue(param);
       if (value !== null) {
-        queryParams.push(`${encodeURIComponent(name)}=${encodeURIComponent(value)}`);
+        queryParams.push(encodeURIComponent(name) + '=' + encodeURIComponent(value));
       }
     }
   }
@@ -277,18 +277,57 @@ async function checkEndpoint(
   };
 }
 
+function runConcurrent<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  concurrency: number
+): Promise<R[]> {
+  return new Promise((resolve, reject) => {
+    const results: R[] = new Array(items.length);
+    let nextIndex = 0;
+    let completed = 0;
+
+    function worker(): void {
+      while (nextIndex < items.length) {
+        const i = nextIndex++;
+        const item = items[i];
+        fn(item).then(r => {
+          results[i] = r;
+          completed++;
+          if (completed === items.length) {
+            resolve(results);
+          } else {
+            worker();
+          }
+        }).catch(err => {
+          reject(err);
+        });
+        if (nextIndex < items.length && concurrency > 1) {
+          return;
+        }
+      }
+    }
+
+    const startCount = Math.min(concurrency, items.length);
+    for (let i = 0; i < startCount; i++) {
+      worker();
+    }
+  });
+}
+
 export async function checkAll(
   endpoints: SpecEndpoint[],
   config: CheckConfig,
   validateFn: (data: unknown, schema: Record<string, unknown>) => string[]
 ): Promise<CheckEntry[]> {
-  const results: CheckEntry[] = [];
+  const filtered: SpecEndpoint[] = [];
+  const initialResults: CheckEntry[] = [];
 
   for (const endpoint of endpoints) {
     const { method } = endpoint;
 
     if (config.skipMethods.has(method)) {
-      results.push({
+      initialResults.push({
         path: endpoint.path,
         method,
         summary: endpoint.summary || '',
@@ -310,9 +349,11 @@ export async function checkAll(
       continue;
     }
 
-    const result = await checkEndpoint(endpoint, config, validateFn);
-    results.push(result);
+    filtered.push(endpoint);
   }
 
-  return results;
+  const concurrency = config.parallel || 5;
+  const results = await runConcurrent(filtered, (ep) => checkEndpoint(ep, config, validateFn), concurrency);
+
+  return [...initialResults, ...results];
 }

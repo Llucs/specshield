@@ -110,12 +110,12 @@ export async function diff(oldSpecPath: string, newSpecPath: string): Promise<{
 
   const oldMap = new Map<string, SpecEndpoint>();
   for (const ep of oldLoaded.endpoints) {
-    oldMap.set(`${ep.method}:${ep.path}`, ep);
+    oldMap.set(ep.method + ':' + ep.path, ep);
   }
 
   const newMap = new Map<string, SpecEndpoint>();
   for (const ep of newLoaded.endpoints) {
-    newMap.set(`${ep.method}:${ep.path}`, ep);
+    newMap.set(ep.method + ':' + ep.path, ep);
   }
 
   for (const [key, oldEp] of oldMap) {
@@ -139,7 +139,7 @@ export async function diff(oldSpecPath: string, newSpecPath: string): Promise<{
           type: 'breaking',
           path: oldEp.path,
           method: oldEp.method,
-          message: `Response ${statusCode} removed`,
+          message: 'Response ' + statusCode + ' removed',
         });
       }
     }
@@ -152,7 +152,7 @@ export async function diff(oldSpecPath: string, newSpecPath: string): Promise<{
             type: 'breaking',
             path: oldEp.path,
             method: oldEp.method,
-            message: `Response ${statusCode}: property "${prop}" removed from schema`,
+            message: 'Response ' + statusCode + ': property "' + prop + '" removed from schema',
           });
         }
       }
@@ -164,7 +164,7 @@ export async function diff(oldSpecPath: string, newSpecPath: string): Promise<{
         type: 'breaking',
         path: oldEp.path,
         method: oldEp.method,
-        message: `Request body: required property "${prop}" added`,
+        message: 'Request body: required property "' + prop + '" added',
       });
     }
 
@@ -174,7 +174,7 @@ export async function diff(oldSpecPath: string, newSpecPath: string): Promise<{
         type: 'breaking',
         path: oldEp.path,
         method: oldEp.method,
-        message: `Required parameter "${param}" added`,
+        message: 'Required parameter "' + param + '" added',
       });
     }
   }
@@ -205,64 +205,6 @@ export async function diff(oldSpecPath: string, newSpecPath: string): Promise<{
   };
 }
 
-export function printDiffReport(
-  result: Awaited<ReturnType<typeof diff>>,
-  noColor: boolean
-): void {
-  if (noColor) chalk.level = 0;
-
-  const breaking = result.changes.filter(c => c.type === 'breaking');
-  const nonBreaking = result.changes.filter(c => c.type === 'non-breaking');
-
-  console.log();
-  console.log(chalk.bold('SpecShield') + chalk.dim(' · OpenAPI Diff'));
-  console.log(chalk.dim('─'.repeat(50)));
-  console.log(`  ${chalk.bold('Old:')}   ${result.oldTitle} ${chalk.dim('v' + result.oldVersion)}`);
-  console.log(`  ${chalk.bold('New:')}   ${result.newTitle} ${chalk.dim('v' + result.newVersion)}`);
-  console.log();
-
-  if (result.changes.length === 0) {
-    console.log(chalk.green('  No changes detected.'));
-    console.log();
-    return;
-  }
-
-  if (breaking.length > 0) {
-    console.log(chalk.red(chalk.bold(`  BREAKING CHANGES (${breaking.length})`)));
-    console.log();
-    for (const change of breaking) {
-      const mc = methodColor(change.method);
-      console.log(
-        chalk.red('  ✗ ') + mc(formatMethod(change.method)) +
-        chalk.dim(formatPath(change.path, 50)) +
-        chalk.red('  ' + change.message)
-      );
-    }
-    console.log();
-  }
-
-  if (nonBreaking.length > 0) {
-    console.log(chalk.yellow(chalk.bold(`  NON-BREAKING CHANGES (${nonBreaking.length})`)));
-    console.log();
-    for (const change of nonBreaking) {
-      const mc = methodColor(change.method);
-      console.log(
-        chalk.yellow('  + ') + mc(formatMethod(change.method)) +
-        chalk.dim(formatPath(change.path, 50)) +
-        chalk.yellow('  ' + change.message)
-      );
-    }
-    console.log();
-  }
-
-  console.log(chalk.dim('─'.repeat(50)));
-  const totalMsg: string[] = [];
-  if (breaking.length > 0) totalMsg.push(chalk.red(`${breaking.length} breaking`));
-  if (nonBreaking.length > 0) totalMsg.push(chalk.yellow(`${nonBreaking.length} non-breaking`));
-  console.log('  ' + (totalMsg.length > 0 ? totalMsg.join(chalk.dim(' | ')) : chalk.dim('no changes')));
-  console.log();
-}
-
 function formatMethod(method: string): string {
   return method.padEnd(7);
 }
@@ -285,4 +227,62 @@ function methodColor(method: string): (s: string) => string {
     OPTIONS: chalk.hex('#0d5aa7'),
   };
   return colors[method] || chalk.white;
+}
+
+export function printDiffReport(
+  result: Awaited<ReturnType<typeof diff>>,
+  noColor: boolean
+): void {
+  if (noColor) chalk.level = 0;
+
+  const breaking = result.changes.filter(c => c.type === 'breaking');
+  const nonBreaking = result.changes.filter(c => c.type === 'non-breaking');
+
+  console.log();
+  console.log(chalk.bold('SpecShield') + chalk.dim(' \u00B7 OpenAPI Diff'));
+  console.log(chalk.dim('\u2500'.repeat(50)));
+  console.log('  ' + chalk.bold('Old:') + '   ' + result.oldTitle + ' ' + chalk.dim('v' + result.oldVersion));
+  console.log('  ' + chalk.bold('New:') + '   ' + result.newTitle + ' ' + chalk.dim('v' + result.newVersion));
+  console.log();
+
+  if (result.changes.length === 0) {
+    console.log(chalk.green('  No changes detected.'));
+    console.log();
+    return;
+  }
+
+  if (breaking.length > 0) {
+    console.log(chalk.red(chalk.bold('  BREAKING CHANGES (' + breaking.length + ')')));
+    console.log();
+    for (const change of breaking) {
+      const mc = methodColor(change.method);
+      console.log(
+        chalk.red('  \u2717 ') + mc(formatMethod(change.method)) +
+        chalk.dim(formatPath(change.path, 50)) +
+        chalk.red('  ' + change.message)
+      );
+    }
+    console.log();
+  }
+
+  if (nonBreaking.length > 0) {
+    console.log(chalk.yellow(chalk.bold('  NON-BREAKING CHANGES (' + nonBreaking.length + ')')));
+    console.log();
+    for (const change of nonBreaking) {
+      const mc = methodColor(change.method);
+      console.log(
+        chalk.yellow('  + ') + mc(formatMethod(change.method)) +
+        chalk.dim(formatPath(change.path, 50)) +
+        chalk.yellow('  ' + change.message)
+      );
+    }
+    console.log();
+  }
+
+  console.log(chalk.dim('\u2500'.repeat(50)));
+  const totalMsg: string[] = [];
+  if (breaking.length > 0) totalMsg.push(chalk.red(breaking.length + ' breaking'));
+  if (nonBreaking.length > 0) totalMsg.push(chalk.yellow(nonBreaking.length + ' non-breaking'));
+  console.log('  ' + (totalMsg.length > 0 ? totalMsg.join(chalk.dim(' | ')) : chalk.dim('no changes')));
+  console.log();
 }
