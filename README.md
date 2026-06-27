@@ -1,46 +1,48 @@
 # SpecShield
 
-OpenAPI contract testing tool — validate your API endpoints against your OpenAPI specification automatically.
+**OpenAPI contract testing for CI pipelines.**
 
 ```bash
 npx specshield check ./openapi.yaml --base-url https://api.example.com/v3
 ```
 
-## Features
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![OpenAPI 3.0](https://img.shields.io/badge/OpenAPI-3.0-brightgreen)](#)
+[![OpenAPI 3.1](https://img.shields.io/badge/OpenAPI-3.1-brightgreen)](#)
+[![CI Ready](https://img.shields.io/badge/CI-ready-ff6b35)](#)
 
-- **Status code validation** — ensures every response status matches the spec
-- **Response schema validation** — validates response bodies against JSON Schema definitions using AJV
-- **Content-Type validation** — checks Content-Type headers against spec declarations
-- **Auto-generated parameters** — fills path/query parameters with examples or type-based defaults
-- **Safe by default** — clear warnings for state-modifying methods (POST, PUT, PATCH, DELETE)
-- **CI-ready** — exits with code 1 on any failure
-- **OpenAPI 3.0 & 3.1** — supports JSON and YAML specs
+SpecShield validates every endpoint of your API against the responses declared in your OpenAPI specification, in CI or locally. It checks that status codes match, response bodies conform to schemas, and content types align — with no setup beyond a spec file and a base URL.
 
-## Installation
+## Commands
 
-```bash
-npm install -g specshield
-```
+### `check`
 
-Or run directly:
+Validate that responses from a running API match its OpenAPI spec:
 
 ```bash
-npx specshield check ./spec.yaml --base-url http://localhost:3000
+specshield check ./openapi.yaml --base-url https://api.example.com/v3
 ```
 
-## Usage
+Output with API Score:
 
-```bash
-specshield check <spec> --base-url <url> [options]
 ```
+SpecShield · OpenAPI Contract Testing
+──────────────────────────────────────────────────
+  Spec:     Petstore v1.0.7
+  Time:    2.3s
+  Total:   20 endpoints
 
-### Arguments
+  PASS GET    /pet/{petId}                       200  ✓ status ✓ schema ✓ ctype
+  PASS POST   /pet                               200  ✓ status ✓ schema ✓ ctype
+  FAIL PUT    /pet                               200  ✓ status ✗ schema ✓ ctype
+       → body/name: must be string
 
-| Argument | Description |
-|----------|-------------|
-| `spec` | Path or URL to OpenAPI spec file (JSON or YAML) |
+──────────────────────────────────────────────────
+  19 passed | 1 failed
+  API Score: 95/100
 
-### Options
+  ✗ 1 check(s) failed.
+```
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -52,53 +54,110 @@ specshield check <spec> --base-url <url> [options]
 | `-p, --param <params...>` | — | Additional parameters as key=value (e.g., `-p petId=42`) |
 | `--verbose` | false | Show detailed output for all checks |
 | `--no-color` | false | Disable colored output |
+| `--report <format>` | `text` | Output format: `text`, `json`, or `junit` |
 
-### Examples
+### `diff`
+
+Detect breaking changes between two versions of an OpenAPI spec:
 
 ```bash
-# Basic check against production
+specshield diff ./spec-v1.yaml ./spec-v2.yaml
+```
+
+```
+SpecShield · OpenAPI Diff
+──────────────────────────────────────────────────
+  Old:   API v1.0.0
+  New:   API v2.0.0
+
+  BREAKING CHANGES (1)
+
+  ✗ POST   /users                    Request body: required property "email" added
+
+  NON-BREAKING CHANGES (1)
+
+  + GET    /users/{id}/posts         New endpoint added
+
+──────────────────────────────────────────────────
+  1 breaking | 1 non-breaking
+```
+
+Breaking changes detected:
+- Removed endpoints
+- Removed response status codes
+- Properties removed from response schemas
+- New required properties in request bodies
+- New required parameters
+
+## Report Formats
+
+```bash
+# JSON — machine-readable for dashboards and custom tooling
+specshield check ./spec.yaml --base-url http://localhost:3000 --report json
+
+# JUnit XML — integrate with CI pipelines (Jenkins, GitLab, etc.)
+specshield check ./spec.yaml --base-url http://localhost:3000 --report junit
+```
+
+## API Score
+
+Each check run produces an API Score (0–100) based on:
+
+| Dimension | Weight | Description |
+|-----------|--------|-------------|
+| Status codes | 40% | Response status matches spec |
+| Schema validation | 35% | Response body conforms to JSON Schema |
+| Content-Type | 15% | Content-Type header matches spec |
+| Documentation | 10% | Endpoints have descriptions |
+
+## Use Cases
+
+- **CI pipelines** — validate every deployment against its spec, exit code 1 on failure
+- **Contract monitoring** — periodically check production APIs for drift
+- **API migrations** — use `diff` to catch breaking changes before they ship
+- **Onboarding** — quickly understand if an unfamiliar API matches its documentation
+
+## Examples
+
+```bash
+# Basic check
 specshield check ./openapi.json --base-url https://api.example.com
 
-# Check with auth header, skip unsafe methods
+# Only GET endpoints, with auth
 specshield check ./spec.yaml --base-url http://localhost:8080 \
   -H "Authorization: Bearer token123" \
-  --skip-methods post,put,patch,delete
+  --only-methods get
 
-# Check only GET endpoints
+# Skip state-modifying methods
 specshield check ./petstore.yaml --base-url https://petstore3.swagger.io/api/v3 \
-  --only-methods get \
-  --verbose
+  --skip-methods post,put,patch,delete
 
 # Override path parameters
 specshield check ./spec.json --base-url http://localhost:3000 \
   -p userId=42 -p status=active
+
+# Breaking change detection in CI
+specshield diff ./main-branch-spec.yaml ./pr-spec.yaml
+
+# JUnit report for GitLab CI
+specshield check ./spec.yaml --base-url http://localhost:3000 --report junit > report.xml
 ```
 
-## Output
+## Installation
 
-```
-SpecShield · OpenAPI Contract Testing
-──────────────────────────────────────────────────
-  Spec:     Petstore v1.0.7
-  Time:    2.3s
-  Total:   20 endpoints
-
-  PASS GET    /pet/findByStatus                  200  ✓ status ✓ schema ✓ ctype
-  PASS GET    /pet/{petId}                       200  ✓ status ✓ schema ✓ ctype
-  PASS POST   /pet                               200  ✓ status ✓ schema ✓ ctype
-  FAIL PUT    /pet                               200  ✓ status ✗ schema ✓ ctype
-       → body/name: must be string
-  PASS DELETE /pet/{petId}                       404  ✓ status --- schema --- ctype
-
-──────────────────────────────────────────────────
-  18 passed | 1 failed | 1 skipped
-
-  ✗ 1 check(s) failed.
+```bash
+npm install -g specshield
 ```
 
-## Why SpecShield?
+Or run without installation:
 
-Postman is proprietary and expensive for teams. Bruno and Hoppscotch are great for manual testing but lack automated contract validation. SpecShield fills the gap: a zero-config CLI that validates every endpoint against its spec in CI, without a GUI or account.
+```bash
+npx specshield check ./spec.yaml --base-url http://localhost:3000
+```
+
+## Why SpecShield
+
+SpecShield complements existing API tools by focusing on automated OpenAPI contract validation for CI pipelines. It provides a lightweight CLI experience with zero configuration — no GUI, no accounts, no complex setup.
 
 ## License
 

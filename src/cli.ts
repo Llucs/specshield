@@ -4,7 +4,11 @@ import { Command } from 'commander';
 import { existsSync } from 'fs';
 import { loadSpec } from './spec.js';
 import { checkAll } from './check.js';
-import { printReport, printUnsafeWarning } from './format.js';
+import {
+  printReport, printReportJson, printReportJunit,
+  printUnsafeWarning,
+} from './format.js';
+import { diff, printDiffReport } from './diff.js';
 import type { CheckConfig } from './types.js';
 import { Ajv } from 'ajv';
 import addFormats from 'ajv-formats';
@@ -50,11 +54,18 @@ program
   .option('-p, --param <params...>', 'Additional parameters as key=value (e.g., -p petId=42)')
   .option('--verbose', 'Show detailed output including passes and skipped')
   .option('--no-color', 'Disable colored output')
+  .option('--report <format>', 'Output format: text (default), json, junit', 'text')
   .action(async (specArg, options) => {
     const specPath = specArg;
 
     if (!existsSync(specPath) && !specPath.startsWith('http')) {
       console.error('Error: Spec file not found: ' + specPath);
+      process.exit(1);
+    }
+
+    const reportFormat = (options.report as string || 'text').toLowerCase();
+    if (!['text', 'json', 'junit'].includes(reportFormat)) {
+      console.error('Error: Invalid report format "' + options.report + '". Use text, json, or junit.');
       process.exit(1);
     }
 
@@ -104,22 +115,57 @@ program
         color: options.color !== false,
       };
 
-      const unsafeMethods = [...new Set(loaded.endpoints
-        .map(e => e.method)
-        .filter(m => !['GET', 'HEAD', 'OPTIONS'].includes(m))
-      )] as string[];
+      if (reportFormat === 'text') {
+        const unsafeMethods = [...new Set(loaded.endpoints
+          .map(e => e.method)
+          .filter(m => !['GET', 'HEAD', 'OPTIONS'].includes(m))
+        )] as string[];
 
-      if (unsafeMethods.length > 0 && !skipMethods.size) {
-        printUnsafeWarning(unsafeMethods);
+        if (unsafeMethods.length > 0 && !skipMethods.size) {
+          printUnsafeWarning(unsafeMethods);
+        }
       }
 
       const validate = createAjvValidator();
       const results = await checkAll(loaded.endpoints, config, validate);
 
-      printReport(results, loaded.title, loaded.version, config.verbose, config.color);
+      if (reportFormat === 'json') {
+        printReportJson(results, loaded.title, loaded.version);
+      } else if (reportFormat === 'junit') {
+        printReportJunit(results, loaded.title);
+      } else {
+        printReport(results, loaded.title, loaded.version, config.verbose, config.color);
+      }
 
       const failCount = results.filter(r => r.status === 'fail' || r.status === 'error').length;
       process.exit(failCount > 0 ? 1 : 0);
+    } catch (err) {
+      console.error('Error: ' + (err as Error).message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('diff')
+  .description('Detect breaking changes between two OpenAPI specs')
+  .argument('<old-spec>', 'Path to the old OpenAPI spec file')
+  .argument('<new-spec>', 'Path to the new OpenAPI spec file')
+  .option('--no-color', 'Disable colored output')
+  .action(async (oldSpec, newSpec, options) => {
+    if (!existsSync(oldSpec)) {
+      console.error('Error: Old spec file not found: ' + oldSpec);
+      process.exit(1);
+    }
+    if (!existsSync(newSpec)) {
+      console.error('Error: New spec file not found: ' + newSpec);
+      process.exit(1);
+    }
+
+    try {
+      const result = await diff(oldSpec, newSpec);
+      printDiffReport(result, options.color === false);
+      const breakingCount = result.changes.filter(c => c.type === 'breaking').length;
+      process.exit(breakingCount > 0 ? 1 : 0);
     } catch (err) {
       console.error('Error: ' + (err as Error).message);
       process.exit(1);

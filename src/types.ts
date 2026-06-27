@@ -31,3 +31,10 @@ export interface CheckEntry {
   durationMs: number;
   skippedReason?: string;
 }
+
+export interface DiffChange {
+  type: 'breaking' | 'non-breaking';
+  path: string;
+  method: string;
+  message: string;
+}
